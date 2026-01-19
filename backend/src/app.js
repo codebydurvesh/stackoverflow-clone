@@ -16,4 +16,8 @@ app.get("/ping", (req, res) => {
   res.send("Pong!");
 });
 
+app.get("/", (req, res) => {
+  res.send("Welcome to the API");
+});
+
 export default app;
