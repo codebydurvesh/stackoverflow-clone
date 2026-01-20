@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { router as questionsRouter } from "./routes/questions.route.js";
+import { router as answerRouter } from "./routes/answer.route.js";
 
 const app = express();
 
@@ -16,6 +17,7 @@ app.use(
 
 //routes
 app.use("/api/questions", questionsRouter);
+app.use("/api/answers", answerRouter);
 
 // ping
 app.get("/ping", (req, res) => {
