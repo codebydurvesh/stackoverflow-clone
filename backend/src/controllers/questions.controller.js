@@ -1,16 +1,24 @@
 import supabase from "../config/supabase.js";
 
 const createQuestion = async (req, res) => {
+  console.log(req.user);
   const { title, description } = req.body;
   if (!title || !description) {
     throw new Error("Title and description are required to create a question.");
   }
-  userId = req.user.id;
-  supabase.from("questions").insert({
-    title,
-    description,
-    author_id: userId,
-  });
+  if (title.length < 10) {
+    return res.status(400).json({ message: "Title too short" });
+  }
+  const userId = req.user.id;
+  supabase
+    .from("questions")
+    .insert({
+      title,
+      description,
+      author_id: userId,
+    })
+    .select()
+    .single();
   return res.status(201).json({ message: "Question created successfully." });
 };
 
