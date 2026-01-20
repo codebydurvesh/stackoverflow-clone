@@ -50,4 +50,58 @@ const getAllQuestions = async (req, res) => {
   }
 };
 
-export { createQuestion, getAllQuestions };
+const getQuestionById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data: question, error: qError } = supabase
+      .from("questions")
+      .select(
+        `
+        id,
+        title,
+        description,
+        created_at,
+        accepted_answer_id,
+        users (
+          id,
+          username,
+          avatar_url
+        )
+      `,
+      )
+      .eq("id", id)
+      .single();
+
+    if (qError || !question) {
+      throw new Error(qError.message);
+    }
+
+    const { data: answers, error: aError } = await supabase
+      .from("answers")
+      .select(
+        `
+        id,
+        content,
+        is_accepted,
+        created_at,
+        users (
+          id,
+          username,
+          avatar_url
+        )
+      `,
+      )
+      .eq("question_id", id)
+      .order("is_accepted", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (aError) {
+      throw new Error(aError.message);
+    }
+    return res.status(200).json({ question, answers });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export { createQuestion, getAllQuestions, getQuestionById };
