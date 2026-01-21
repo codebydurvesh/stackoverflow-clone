@@ -7,33 +7,17 @@ import {
 export const createAnswer = async (req, res) => {
   try {
     const { questionId, content } = req.body;
-    const userId = req.user?.id || "TEMP_USER_ID";
+    const userId = req.user.id;
 
     if (!questionId || !content) {
       return res.status(400).json({ message: "Missing fields" });
     }
 
-    const { data: question } = await supabase
-      .from("questions")
-      .select("id")
-      .eq("id", questionId)
-      .single();
-
-    if (!question) {
-      return res.status(404).json({ message: "Question not found" });
-    }
-
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("answers")
-      .insert({
-        question_id: questionId,
-        content,
-        author_id: userId,
-      })
+      .insert({ question_id: questionId, content, author_id: userId })
       .select()
       .single();
-
-    if (error) throw error;
 
     res.status(201).json(data);
   } catch (err) {
@@ -41,9 +25,6 @@ export const createAnswer = async (req, res) => {
   }
 };
 
-/**
- * POST /answers/:answerId/accept
- */
 export const acceptAnswer = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -55,10 +36,6 @@ export const acceptAnswer = async (req, res) => {
       .eq("id", answerId)
       .single();
 
-    if (!answer) {
-      return res.status(404).json({ message: "Answer not found" });
-    }
-
     const { data: question } = await supabase
       .from("questions")
       .select("author_id")
@@ -69,27 +46,25 @@ export const acceptAnswer = async (req, res) => {
       return res.status(403).json({ message: "Not allowed" });
     }
 
-    const { data: existingAccepted } = await supabase
+    const { data: existing } = await supabase
       .from("answers")
       .select("id, author_id")
       .eq("question_id", answer.question_id)
       .eq("is_accepted", true)
       .single();
 
-    if (existingAccepted) {
+    if (existing) {
       await supabase
         .from("answers")
         .update({ is_accepted: false })
-        .eq("id", existingAccepted.id);
-
-      await revertAnswerUpvote(existingAccepted.author_id);
+        .eq("id", existing.id);
+      await revertAnswerUpvote(existing.author_id);
     }
 
     await supabase
       .from("answers")
       .update({ is_accepted: true })
       .eq("id", answer.id);
-
     await applyAnswerAccepted(answer.author_id);
 
     res.json({ message: "Answer accepted" });

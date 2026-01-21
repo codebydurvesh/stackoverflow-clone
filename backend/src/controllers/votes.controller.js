@@ -20,64 +20,36 @@ export const castVote = async (req, res) => {
       .eq("id", answerId)
       .single();
 
-    if (!answer) {
-      return res.status(404).json({ message: "Answer not found" });
-    }
-
     if (answer.author_id === userId) {
       return res.status(403).json({ message: "Cannot vote on own answer" });
     }
 
-    const { data: existingVote } = await supabase
+    const { data: existing } = await supabase
       .from("votes")
       .select("*")
       .eq("user_id", userId)
       .eq("answer_id", answerId)
       .single();
 
-    // Same vote → remove
-    if (existingVote && existingVote.type === type) {
-      await supabase.from("votes").delete().eq("id", existingVote.id);
-
-      if (type === "up") {
-        await revertAnswerUpvote(answer.author_id);
-      }
-
+    if (existing && existing.type === type) {
+      await supabase.from("votes").delete().eq("id", existing.id);
+      if (type === "up") await revertAnswerUpvote(answer.author_id);
       return res.json({ message: "Vote removed" });
     }
 
-    // Change vote
-    if (existingVote) {
-      await supabase.from("votes").update({ type }).eq("id", existingVote.id);
-
-      if (existingVote.type === "up") {
-        await revertAnswerUpvote(answer.author_id);
-      }
-      if (type === "up") {
-        await applyAnswerUpvote(answer.author_id);
-      }
-      if (type === "down") {
-        await applyAnswerDownvote(answer.author_id);
-      }
-
-      return res.json({ message: "Vote updated" });
+    if (existing) {
+      await supabase.from("votes").update({ type }).eq("id", existing.id);
+      if (existing.type === "up") await revertAnswerUpvote(answer.author_id);
+    } else {
+      await supabase
+        .from("votes")
+        .insert({ user_id: userId, answer_id: answerId, type });
     }
 
-    // New vote
-    await supabase.from("votes").insert({
-      user_id: userId,
-      answer_id: answerId,
-      type,
-    });
+    if (type === "up") await applyAnswerUpvote(answer.author_id);
+    if (type === "down") await applyAnswerDownvote(answer.author_id);
 
-    if (type === "up") {
-      await applyAnswerUpvote(answer.author_id);
-    }
-    if (type === "down") {
-      await applyAnswerDownvote(answer.author_id);
-    }
-
-    res.status(201).json({ message: "Vote added" });
+    res.json({ message: "Vote applied" });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

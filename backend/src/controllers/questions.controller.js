@@ -1,85 +1,89 @@
 import supabase from "../config/supabase.js";
 
+
 export const getAllQuestions = async (req, res) => {
   try {
-    const { id } = req.params;
-
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 5;
+    const limit = parseInt(req.query.limit) || 10;
     const sort = req.query.sort || "newest";
+    const tagsParam = req.query.tags || req.query.tag;
 
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    // Fetch question
-    const { data: question, error: qError } = await supabase
-      .from("questions")
-      .select(
-        `
+    let questionIds = null;
+
+    // Tag filtering
+    if (tagsParam) {
+      const tagNames = tagsParam.split(",").map((t) => t.trim().toLowerCase());
+
+      const { data: tags } = await supabase
+        .from("tags")
+        .select("id")
+        .in("name", tagNames);
+
+      if (!tags?.length) {
+        return res.json({
+          data: [],
+          pagination: { page, limit, total: 0, totalPages: 0 },
+        });
+      }
+
+      const tagIds = tags.map((t) => t.id);
+
+      const { data: qTags } = await supabase
+        .from("question_tags")
+        .select("question_id")
+        .in("tag_id", tagIds);
+
+      questionIds = [...new Set(qTags.map((q) => q.question_id))];
+
+      if (!questionIds.length) {
+        return res.json({
+          data: [],
+          pagination: { page, limit, total: 0, totalPages: 0 },
+        });
+      }
+    }
+
+    let query = supabase.from("questions").select(
+      `
         id,
         title,
         description,
         created_at,
-        users (
-          id,
-          username,
-          avatar_url
-        )
-        `,
-      )
-      .eq("id", id)
-      .single();
-
-    if (qError || !question) {
-      return res.status(404).json({ message: "Question not found" });
-    }
-
-    // Build answers query
-    let answersQuery = supabase
-      .from("answers")
-      .select(
-        `
-        id,
-        content,
-        is_accepted,
-        created_at,
-        users (
-          id,
-          username,
-          avatar_url
-        ),
+        users ( id, username, avatar_url ),
         votes ( vote_value )
         `,
-        { count: "exact" },
-      )
-      .eq("question_id", id)
-      .order("is_accepted", { ascending: false });
+      { count: "exact" },
+    );
 
-    //  Sorting logic
+    if (questionIds) query = query.in("id", questionIds);
+
     if (sort === "oldest") {
-      answersQuery = answersQuery.order("created_at", { ascending: true });
+      query = query.order("created_at", { ascending: true });
     } else if (sort === "votes") {
-      answersQuery = answersQuery.order("votes(vote_value)", {
+      query = query.order("votes(vote_value)", {
         ascending: false,
         nullsFirst: false,
       });
     } else {
-      // newest (default)
-      answersQuery = answersQuery.order("created_at", { ascending: false });
+      query = query.order("created_at", { ascending: false });
     }
 
-    //  Pagination
-    const {
-      data: answers,
-      error: aError,
-      count,
-    } = await answersQuery.range(from, to);
+    const { data, count } = await query.range(from, to);
 
-    if (aError) throw aError;
+    const formatted = data.map((q) => ({
+      id: q.id,
+      title: q.title,
+      description: q.description,
+      created_at: q.created_at,
+      score: q.votes?.reduce((s, v) => s + v.vote_value, 0) || 0,
+      user: q.users,
+    }));
 
-    res.status(200).json({
-      question,
-      answers,
+    res.json({
+      data: formatted,
       pagination: {
         page,
         limit,
@@ -92,42 +96,50 @@ export const getAllQuestions = async (req, res) => {
   }
 };
 
+
 export const createQuestion = async (req, res) => {
   try {
-    const { title, description } = req.body;
+    const { title, description, tags = [] } = req.body;
+    const userId = req.user.id;
 
-    const userId = req.user?.id;
-
-    if (!userId) {
-      return res.status(401).json({ message: "Unauthorized" });
+    if (!title || !description || !tags.length) {
+      return res
+        .status(400)
+        .json({ message: "Title, description & tags required" });
     }
 
-    if (!title || !description) {
-      return res.status(400).json({ message: "Missing fields" });
-    }
-
-    const { data, error } = await supabase
+    const { data: question } = await supabase
       .from("questions")
-      .insert({
-        title,
-        description,
-        author_id: userId,
-      })
+      .insert({ title, description, author_id: userId })
       .select()
       .single();
 
-    if (error) throw error;
+    // attach tags
+    const { data: tagRows } = await supabase
+      .from("tags")
+      .select("id")
+      .in(
+        "name",
+        tags.map((t) => t.toLowerCase()),
+      );
 
-    res.status(201).json(data);
+    const questionTags = tagRows.map((t) => ({
+      question_id: question.id,
+      tag_id: t.id,
+    }));
+
+    await supabase.from("question_tags").insert(questionTags);
+
+    res.status(201).json(question);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
+
 export const getQuestionById = async (req, res) => {
   try {
     const { id } = req.params;
-
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 5;
     const sort = req.query.sort || "newest";
@@ -135,8 +147,7 @@ export const getQuestionById = async (req, res) => {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    // Fetch question
-    const { data: question, error: qError } = await supabase
+    const { data: question } = await supabase
       .from("questions")
       .select(
         `
@@ -144,21 +155,15 @@ export const getQuestionById = async (req, res) => {
         title,
         description,
         created_at,
-        users (
-          id,
-          username,
-          avatar_url
-        )
+        users ( id, username, avatar_url )
         `,
       )
       .eq("id", id)
       .single();
 
-    if (qError || !question) {
+    if (!question)
       return res.status(404).json({ message: "Question not found" });
-    }
 
-    // Build answers query
     let answersQuery = supabase
       .from("answers")
       .select(
@@ -167,11 +172,7 @@ export const getQuestionById = async (req, res) => {
         content,
         is_accepted,
         created_at,
-        users (
-          id,
-          username,
-          avatar_url
-        ),
+        users ( id, username, avatar_url ),
         votes ( vote_value )
         `,
         { count: "exact" },
@@ -179,45 +180,28 @@ export const getQuestionById = async (req, res) => {
       .eq("question_id", id)
       .order("is_accepted", { ascending: false });
 
-    // Sorting logic
     if (sort === "oldest") {
       answersQuery = answersQuery.order("created_at", { ascending: true });
     } else if (sort === "votes") {
       answersQuery = answersQuery.order("votes(vote_value)", {
         ascending: false,
-        nullsFirst: false,
       });
     } else {
-      // newest (default)
       answersQuery = answersQuery.order("created_at", { ascending: false });
     }
 
-    //  Pagination
-    const {
-      data: answers,
-      error: aError,
-      count,
-    } = await answersQuery.range(from, to);
+    const { data: answers, count } = await answersQuery.range(from, to);
 
-    if (aError) throw aError;
+    const formattedAnswers = answers.map((a) => ({
+      id: a.id,
+      content: a.content,
+      is_accepted: a.is_accepted,
+      created_at: a.created_at,
+      score: a.votes?.reduce((s, v) => s + v.vote_value, 0) || 0,
+      user: a.users,
+    }));
 
-    // compute answer scores
-    const formattedAnswers = answers.map((answer) => {
-      const score =
-        answer.votes?.reduce((sum, vote) => sum + vote.vote_value, 0) || 0;
-
-      return {
-        id: answer.id,
-        content: answer.content,
-        is_accepted: answer.is_accepted,
-        created_at: answer.created_at,
-        score,
-        user: answer.users,
-      };
-    });
-
-    // Final response
-    res.status(200).json({
+    res.json({
       question,
       answers: formattedAnswers,
       pagination: {
