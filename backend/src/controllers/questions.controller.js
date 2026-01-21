@@ -2,7 +2,17 @@ import supabase from "../config/supabase.js";
 
 export const getAllQuestions = async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const { id } = req.params;
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 5;
+    const sort = req.query.sort || "newest";
+
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    // Fetch question
+    const { data: question, error: qError } = await supabase
       .from("questions")
       .select(
         `
@@ -15,27 +25,82 @@ export const getAllQuestions = async (req, res) => {
           username,
           avatar_url
         )
-      `,
+        `,
       )
-      .order("created_at", { ascending: false });
+      .eq("id", id)
+      .single();
 
-    if (error) throw error;
+    if (qError || !question) {
+      return res.status(404).json({ message: "Question not found" });
+    }
 
-    res.status(200).json(data);
+    // Build answers query
+    let answersQuery = supabase
+      .from("answers")
+      .select(
+        `
+        id,
+        content,
+        is_accepted,
+        created_at,
+        users (
+          id,
+          username,
+          avatar_url
+        ),
+        votes ( vote_value )
+        `,
+        { count: "exact" },
+      )
+      .eq("question_id", id)
+      .order("is_accepted", { ascending: false });
+
+    //  Sorting logic
+    if (sort === "oldest") {
+      answersQuery = answersQuery.order("created_at", { ascending: true });
+    } else if (sort === "votes") {
+      answersQuery = answersQuery.order("votes(vote_value)", {
+        ascending: false,
+        nullsFirst: false,
+      });
+    } else {
+      // newest (default)
+      answersQuery = answersQuery.order("created_at", { ascending: false });
+    }
+
+    //  Pagination
+    const {
+      data: answers,
+      error: aError,
+      count,
+    } = await answersQuery.range(from, to);
+
+    if (aError) throw aError;
+
+    res.status(200).json({
+      question,
+      answers,
+      pagination: {
+        page,
+        limit,
+        total: count,
+        totalPages: Math.ceil(count / limit),
+      },
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
-/**
- * POST /questions/create
- */
 export const createQuestion = async (req, res) => {
   try {
     const { title, description } = req.body;
 
-    // TEMP until auth is wired
-    const userId = req.user?.id || "TEMP_USER_ID";
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
     if (!title || !description) {
       return res.status(400).json({ message: "Missing fields" });
@@ -59,13 +124,18 @@ export const createQuestion = async (req, res) => {
   }
 };
 
-/**
- * GET /questions/:id
- */
 export const getQuestionById = async (req, res) => {
   try {
     const { id } = req.params;
 
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 5;
+    const sort = req.query.sort || "newest";
+
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    // Fetch question
     const { data: question, error: qError } = await supabase
       .from("questions")
       .select(
@@ -79,7 +149,7 @@ export const getQuestionById = async (req, res) => {
           username,
           avatar_url
         )
-      `,
+        `,
       )
       .eq("id", id)
       .single();
@@ -88,7 +158,8 @@ export const getQuestionById = async (req, res) => {
       return res.status(404).json({ message: "Question not found" });
     }
 
-    const { data: answers, error: aError } = await supabase
+    // Build answers query
+    let answersQuery = supabase
       .from("answers")
       .select(
         `
@@ -100,16 +171,62 @@ export const getQuestionById = async (req, res) => {
           id,
           username,
           avatar_url
-        )
-      `,
+        ),
+        votes ( vote_value )
+        `,
+        { count: "exact" },
       )
       .eq("question_id", id)
-      .order("is_accepted", { ascending: false })
-      .order("created_at", { ascending: false });
+      .order("is_accepted", { ascending: false });
+
+    // Sorting logic
+    if (sort === "oldest") {
+      answersQuery = answersQuery.order("created_at", { ascending: true });
+    } else if (sort === "votes") {
+      answersQuery = answersQuery.order("votes(vote_value)", {
+        ascending: false,
+        nullsFirst: false,
+      });
+    } else {
+      // newest (default)
+      answersQuery = answersQuery.order("created_at", { ascending: false });
+    }
+
+    //  Pagination
+    const {
+      data: answers,
+      error: aError,
+      count,
+    } = await answersQuery.range(from, to);
 
     if (aError) throw aError;
 
-    res.status(200).json({ question, answers });
+    // compute answer scores
+    const formattedAnswers = answers.map((answer) => {
+      const score =
+        answer.votes?.reduce((sum, vote) => sum + vote.vote_value, 0) || 0;
+
+      return {
+        id: answer.id,
+        content: answer.content,
+        is_accepted: answer.is_accepted,
+        created_at: answer.created_at,
+        score,
+        user: answer.users,
+      };
+    });
+
+    // Final response
+    res.status(200).json({
+      question,
+      answers: formattedAnswers,
+      pagination: {
+        page,
+        limit,
+        total: count,
+        totalPages: Math.ceil(count / limit),
+      },
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
