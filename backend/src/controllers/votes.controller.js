@@ -1,86 +1,88 @@
-import supabase from "../config/supabaseClient.js";
+import supabase from "../config/supabase.js";
+import {
+  applyAnswerUpvote,
+  revertAnswerUpvote,
+  applyAnswerDownvote,
+} from "../services/reputation.service.js";
 
-export const castVote = async (req, res) => {
+const castVote = async (req, res) => {
   try {
-    const { targetId, targetType, voteValue } = req.body;
-
     const userId = req.user.id;
+    const { answerId, type } = req.body;
 
-    // 1) Validate input
-    if (!targetId || !targetType || ![1, -1].includes(voteValue)) {
-      return res.status(400).json({ message: "Invalid vote payload" });
-    }
-    if (!["question", "answer"].includes(targetType)) {
-      return res.status(400).json({ message: "Invalid targetType" });
+    if (!["up", "down"].includes(type)) {
+      return res.status(400).json({ message: "Invalid vote type" });
     }
 
-    // 2) Fetch target & prevent self-vote
-    const table = targetType === "question" ? "questions" : "answers";
-    const { data: target, error: tErr } = await supabase
-      .from(table)
-      .select("id, author_id")
-      .eq("id", targetId)
+    // 1. Get answer author
+    const { data: answer, error: answerError } = await supabase
+      .from("answers")
+      .select("author_id")
+      .eq("id", answerId)
       .single();
 
-    if (tErr || !target) {
-      return res.status(404).json({ message: `${targetType} not found` });
-    }
-    if (target.author_id === userId) {
-      return res.status(403).json({ message: "Cannot vote on own content" });
+    if (answerError) throw answerError;
+
+    if (answer.author_id === userId) {
+      return res
+        .status(403)
+        .json({ message: "Cannot vote on your own answer" });
     }
 
-    // 3) Check existing vote
+    // 2. Check existing vote
     const { data: existingVote } = await supabase
       .from("votes")
-      .select("id, vote_value")
+      .select("*")
       .eq("user_id", userId)
-      .eq("target_id", targetId)
-      .eq("target_type", targetType)
-      .maybeSingle();
+      .eq("answer_id", answerId)
+      .single();
 
-    // 4) Toggle logic
-    // Case A: No existing vote > insert
-    if (!existingVote) {
-      const { error } = await supabase.from("votes").insert({
-        user_id: userId,
-        target_id: targetId,
-        target_type: targetType,
-        vote_value: voteValue,
-      });
-      if (error) throw error;
-      return res.status(201).json({ message: "Vote added" });
+    // 3. Same vote → remove
+    if (existingVote && existingVote.type === type) {
+      await supabase.from("votes").delete().eq("id", existingVote.id);
+
+      if (type === "up") {
+        await revertAnswerUpvote(answer.author_id);
+      }
+
+      return res.json({ message: "Vote removed" });
     }
 
-    // Case B: Same vote > remove
-    if (existingVote.vote_value === voteValue) {
-      const { error } = await supabase
-        .from("votes")
-        .delete()
-        .eq("id", existingVote.id);
-      if (error) throw error;
-      return res.status(200).json({ message: "Vote removed" });
+    // 4. Change vote
+    if (existingVote) {
+      await supabase.from("votes").update({ type }).eq("id", existingVote.id);
+
+      if (existingVote.type === "up") {
+        await revertAnswerUpvote(answer.author_id);
+      }
+      if (type === "up") {
+        await applyAnswerUpvote(answer.author_id);
+      }
+      if (type === "down") {
+        await applyAnswerDownvote(answer.author_id);
+      }
+
+      return res.json({ message: "Vote updated" });
     }
 
-    // Case C: Opposite vote > replace (delete + insert)
-    const { error: delErr } = await supabase
-      .from("votes")
-      .delete()
-      .eq("id", existingVote.id);
-    if (delErr) throw delErr;
-
-    const { error: insErr } = await supabase.from("votes").insert({
+    // 5. New vote
+    await supabase.from("votes").insert({
       user_id: userId,
-      target_id: targetId,
-      target_type: targetType,
-      vote_value: voteValue,
+      answer_id: answerId,
+      type,
     });
-    if (insErr) throw insErr;
 
-    return res.status(200).json({ message: "Vote updated" });
+    if (type === "up") {
+      await applyAnswerUpvote(answer.author_id);
+    }
+    if (type === "down") {
+      await applyAnswerDownvote(answer.author_id);
+    }
+
+    res.status(201).json({ message: "Vote added" });
   } catch (err) {
-    return res.status(500).json({
-      message: "Failed to cast vote",
-      error: err.message,
-    });
+    console.error(err);
+    res.status(500).json({ message: "Voting failed" });
   }
 };
+export { castVote };
