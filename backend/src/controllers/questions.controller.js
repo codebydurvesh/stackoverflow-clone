@@ -1,28 +1,6 @@
 import supabase from "../config/supabase.js";
 
-const createQuestion = async (req, res) => {
-  console.log(req.user);
-  const { title, description } = req.body;
-  if (!title || !description) {
-    throw new Error("Title and description are required to create a question.");
-  }
-  if (title.length < 10) {
-    return res.status(400).json({ message: "Title too short" });
-  }
-  const userId = req.user.id;
-  supabase
-    .from("questions")
-    .insert({
-      title,
-      description,
-      author_id: userId,
-    })
-    .select()
-    .single();
-  return res.status(201).json({ message: "Question created successfully." });
-};
-
-const getAllQuestions = async (req, res) => {
+export const getAllQuestions = async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("questions")
@@ -41,19 +19,54 @@ const getAllQuestions = async (req, res) => {
       )
       .order("created_at", { ascending: false });
 
-    if (error) {
-      throw new Error(error.message);
-    }
-    return res.status(200).json(data);
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
+    if (error) throw error;
+
+    res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };
 
-const getQuestionById = async (req, res) => {
+/**
+ * POST /questions/create
+ */
+export const createQuestion = async (req, res) => {
+  try {
+    const { title, description } = req.body;
+
+    // TEMP until auth is wired
+    const userId = req.user?.id || "TEMP_USER_ID";
+
+    if (!title || !description) {
+      return res.status(400).json({ message: "Missing fields" });
+    }
+
+    const { data, error } = await supabase
+      .from("questions")
+      .insert({
+        title,
+        description,
+        author_id: userId,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.status(201).json(data);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/**
+ * GET /questions/:id
+ */
+export const getQuestionById = async (req, res) => {
   try {
     const { id } = req.params;
-    const { data: question, error: qError } = supabase
+
+    const { data: question, error: qError } = await supabase
       .from("questions")
       .select(
         `
@@ -61,7 +74,6 @@ const getQuestionById = async (req, res) => {
         title,
         description,
         created_at,
-        accepted_answer_id,
         users (
           id,
           username,
@@ -73,7 +85,7 @@ const getQuestionById = async (req, res) => {
       .single();
 
     if (qError || !question) {
-      throw new Error(qError.message);
+      return res.status(404).json({ message: "Question not found" });
     }
 
     const { data: answers, error: aError } = await supabase
@@ -95,13 +107,10 @@ const getQuestionById = async (req, res) => {
       .order("is_accepted", { ascending: false })
       .order("created_at", { ascending: false });
 
-    if (aError) {
-      throw new Error(aError.message);
-    }
-    return res.status(200).json({ question, answers });
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
+    if (aError) throw aError;
+
+    res.status(200).json({ question, answers });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };
-
-export { createQuestion, getAllQuestions, getQuestionById };

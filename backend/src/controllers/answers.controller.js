@@ -1,17 +1,16 @@
 import supabase from "../config/supabase.js";
+import {
+  applyAnswerAccepted,
+  revertAnswerUpvote,
+} from "../services/reputation.service.js";
 
-const createAnswer = async (req, res) => {
+export const createAnswer = async (req, res) => {
   try {
     const { questionId, content } = req.body;
-
-    const userId = req.user.id;
+    const userId = req.user?.id || "TEMP_USER_ID";
 
     if (!questionId || !content) {
-      return res.status(400).json({ message: "All fields required" });
-    }
-
-    if (content.length < 10) {
-      return res.status(400).json({ message: "Answer too short" });
+      return res.status(400).json({ message: "Missing fields" });
     }
 
     const { data: question } = await supabase
@@ -26,34 +25,33 @@ const createAnswer = async (req, res) => {
 
     const { data, error } = await supabase
       .from("answers")
-      .insert([
-        {
-          question_id: questionId,
-          content,
-          author_id: userId,
-        },
-      ])
+      .insert({
+        question_id: questionId,
+        content,
+        author_id: userId,
+      })
       .select()
       .single();
 
     if (error) throw error;
 
-    return res.status(201).json(data);
+    res.status(201).json(data);
   } catch (err) {
-    return res.status(500).json({
-      message: "Failed to create answer",
-      error: err.message,
-    });
+    res.status(500).json({ message: err.message });
   }
 };
 
-const acceptAnswer = async (req, res) => {
+/**
+ * POST /answers/:answerId/accept
+ */
+export const acceptAnswer = async (req, res) => {
   try {
-    const { id: answerId } = req.params;
     const userId = req.user.id;
+    const { answerId } = req.params;
+
     const { data: answer } = await supabase
       .from("answers")
-      .select("id, question_id")
+      .select("id, author_id, question_id")
       .eq("id", answerId)
       .single();
 
@@ -63,41 +61,39 @@ const acceptAnswer = async (req, res) => {
 
     const { data: question } = await supabase
       .from("questions")
-      .select("id, author_id")
+      .select("author_id")
       .eq("id", answer.question_id)
       .single();
 
-    if (!question) {
-      return res.status(404).json({ message: "Question not found" });
-    }
-
     if (question.author_id !== userId) {
-      return res
-        .status(403)
-        .json({ message: "Only the question author can accept an answer" });
+      return res.status(403).json({ message: "Not allowed" });
     }
 
-    await supabase
+    const { data: existingAccepted } = await supabase
       .from("answers")
-      .update({ is_accepted: false })
-      .eq("question_id", question.id);
+      .select("id, author_id")
+      .eq("question_id", answer.question_id)
+      .eq("is_accepted", true)
+      .single();
+
+    if (existingAccepted) {
+      await supabase
+        .from("answers")
+        .update({ is_accepted: false })
+        .eq("id", existingAccepted.id);
+
+      await revertAnswerUpvote(existingAccepted.author_id);
+    }
 
     await supabase
       .from("answers")
       .update({ is_accepted: true })
-      .eq("id", answerId);
+      .eq("id", answer.id);
 
-    await supabase
-      .from("questions")
-      .update({ accepted_answer_id: answerId })
-      .eq("id", question.id);
+    await applyAnswerAccepted(answer.author_id);
 
-    return res.status(200).json({ message: "Answer accepted successfully" });
-  } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Failed to accept answer", error: error.message });
+    res.json({ message: "Answer accepted" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };
-
-export { createAnswer, acceptAnswer };
