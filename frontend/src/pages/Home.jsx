@@ -1,53 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import Header from "../components/Header.jsx";
+import AllQuestions from "../components/AllQuestions.jsx";
 
 const Home = () => {
   return (
     <>
-      <div className="flex justify-center">
-        <div className="fixed h-16 flex justify-center w-full p-2 gap-5 border-gray-300 border-2 ">
-          <img
-            className="h-9 hover:cursor-pointer"
-            src="https://stackoverflow.design/assets/img/logos/so/logo-stackoverflow.svg"
-            alt="stackoverflow logo"
-          />
-          <a
-            href="https://stackoverflow.co/"
-            target="_blank"
-            className="text-gray-400 text-[15px] hover:bg-gray-200 rounded-md p-3"
-          >
-            About
-          </a>
-          <a
-            href="https://stackoverflow.co/internal/"
-            target="_blank"
-            className="text-gray-400 text-[15px] w-30 hover:bg-gray-200 rounded-md p-3"
-          >
-            For Teams
-          </a>
-
-          <input
-            type="text"
-            placeholder="Search..."
-            className="bg-white w-[53%] p-2 rounded-md text-sm border-2 border-gray-300"
-          />
-
-          <Link to="/login">
-            <img
-              src="https://cdn-icons-png.freepik.com/512/9307/9307950.png"
-              alt="account icon"
-              className="h-11 cursor-pointer hover:bg-gray-200 rounded-full"
-            />
-          </Link>
-
-          {/* <button className="text-blue-600 w-25 bg-white border-1 p-2 rounded-md hover:bg-gray-200 cursor-pointer">
-            Log in
-          </button>
-          <button className="text-white w-25 bg-blue-600 border-1 p-2 rounded-md hover:bg-blue-700 cursor-pointer">
-            Sign up
-          </button> */}
-        </div>
-      </div>
+      <Header />
+      <AllQuestions />
     </>
   );
 };
