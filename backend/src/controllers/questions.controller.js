@@ -1,5 +1,5 @@
 import supabase from "../config/supabase.js";
-
+import { moderateQuestion } from "../services/aiModeration.service.js";
 
 export const getAllQuestions = async (req, res) => {
   try {
@@ -96,7 +96,6 @@ export const getAllQuestions = async (req, res) => {
   }
 };
 
-
 export const createQuestion = async (req, res) => {
   try {
     const { title, description, tags = [] } = req.body;
@@ -106,6 +105,16 @@ export const createQuestion = async (req, res) => {
       return res
         .status(400)
         .json({ message: "Title, description & tags required" });
+    }
+
+    // Ai Moderation
+    const moderationResult = await moderateQuestion({ title, description });
+
+    if (moderationResult.decision === "BLOCK") {
+      return res.status(400).json({
+        message: "Question blocked by AI moderation",
+        reason: moderationResult.reason,
+      });
     }
 
     const { data: question } = await supabase
@@ -135,7 +144,6 @@ export const createQuestion = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
 
 export const getQuestionById = async (req, res) => {
   try {
