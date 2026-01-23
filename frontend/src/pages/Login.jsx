@@ -6,7 +6,7 @@ const Login = () => {
   return (
     <>
       <Header />
-      <div className="flex justify-center items-center h-screen">
+      <div className="flex justify-center items-center h-[80vh]">
         <div className="h-120 w-[25%] border-2 border-gray-200 rounded-md shadow-xl flex flex-col justify-start p-10 gap-3">
           <h1 className="mt-11 text-3xl font-bold mb-5 text-center">Login</h1>
           <input

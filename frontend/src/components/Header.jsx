@@ -3,8 +3,8 @@ import { Link } from "react-router-dom";
 
 const Header = () => {
   return (
-    <div className="flex justify-center">
-      <div className="fixed h-16 flex justify-center w-full p-2 gap-5 border-gray-300 border-2 ">
+    <div className="w-full h-16 bg-white border-b shadow-sm border-gray-300 sticky top-0 z-50">
+      <div className="fixed flex justify-center w-full p-2 gap-5 border-gray-300 border-2 ">
         <Link to="/">
           <img
             className="h-9 hover:cursor-pointer"
@@ -22,7 +22,7 @@ const Header = () => {
         <a
           href="https://stackoverflow.co/internal/"
           target="_blank"
-          className="text-gray-400 text-[15px] w-30 hover:bg-gray-200 rounded-md p-3"
+          className="text-gray-400 text-[15px] w-23 hover:bg-gray-200 rounded-md p-3"
         >
           For Teams
         </a>
