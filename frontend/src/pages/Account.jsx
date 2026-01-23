@@ -1,5 +1,7 @@
 import React from "react";
 import Header from "../components/Header";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "../config/supabase.js";
 
 const user = {
   username: "Durvesh",
@@ -13,6 +15,15 @@ const user = {
 };
 
 const Account = () => {
+  const navigate = useNavigate();
+  const logoutHandler = () => {
+    const { error } = supabase.auth.signOut();
+    if (error) {
+      console.log("Error logging out:", error.message);
+    } else {
+      navigate("/");
+    }
+  };
   return (
     <div>
       <Header />
@@ -44,7 +55,10 @@ const Account = () => {
             </div>
           </div>
 
-          <button className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md">
+          <button
+            onClick={logoutHandler}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md"
+          >
             Log out
           </button>
         </div>

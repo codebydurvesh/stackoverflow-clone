@@ -1,8 +1,39 @@
-import React from "react";
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Link, redirect } from "react-router-dom";
 import Header from "../components/Header.jsx";
+import { supabase } from "../config/supabase.js";
+import { useNavigate } from "react-router-dom";
 
 const Signup = () => {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    setSuccess("");
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+    setLoading(false);
+    if (error) {
+      setError(error.message);
+    } else {
+      setSuccess(
+        "Signup successful! Please check your email to confirm your account.",
+      );
+      setTimeout(() => {
+        navigate("/");
+      }, 2000);
+    }
+  };
+
   return (
     <>
       <Header />
@@ -16,14 +47,26 @@ const Signup = () => {
             type="text"
             placeholder="Email"
             className="bg-white w-full p-2 rounded-md text-sm border-2 border-gray-300"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
           />
           <input
             type="password"
             placeholder="Password"
             className="bg-white w-full p-2 rounded-md text-sm border-2 border-gray-300"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
           />
-          <button className="p-2 bg-blue-500 text-white rounded-md mt-10 hover:bg-blue-600 cursor-pointer">
-            Log in
+          {error && <div className="text-red-500 text-center">{error}</div>}
+          {success && (
+            <div className="text-green-500 text-center">{success}</div>
+          )}
+          <button
+            onClick={handleSignup}
+            className="p-2 bg-blue-500 text-white rounded-md mt-10 hover:bg-blue-600 cursor-pointer"
+            disabled={loading}
+          >
+            {loading ? "Signing up..." : "Sign up"}
           </button>
           <p className="text-center text-sm text-gray-600">
             Already have an account?{" "}

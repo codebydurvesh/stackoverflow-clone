@@ -33,7 +33,7 @@ const Header = () => {
           className="bg-white w-[53%] p-2 rounded-md text-sm border-2 border-gray-300"
         />
 
-        <Link to="/login">
+        <Link to="/account">
           <img
             src="https://cdn-icons-png.freepik.com/512/9307/9307950.png"
             alt="account icon"
