@@ -6,7 +6,7 @@ export const getAllQuestions = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const sort = req.query.sort || "newest";
-    const tagsParam = req.query.tags || req.query.tag;
+    const tagsParam = req.query.tags || req.query.tag || null;
 
     const from = (page - 1) * limit;
     const to = from + limit - 1;
@@ -52,7 +52,7 @@ export const getAllQuestions = async (req, res) => {
         title,
         description,
         created_at,
-        users ( id, username, avatar_url ),
+        users ( id, username),
         votes ( vote_value )
         `,
       { count: "exact" },
@@ -72,15 +72,20 @@ export const getAllQuestions = async (req, res) => {
     }
 
     const { data, count } = await query.range(from, to);
+    console.log("Fetched questions data:", data);
 
-    const formatted = data.map((q) => ({
-      id: q.id,
-      title: q.title,
-      description: q.description,
-      created_at: q.created_at,
-      score: q.votes?.reduce((s, v) => s + v.vote_value, 0) || 0,
-      user: q.users,
-    }));
+    const formatted = Array.isArray(data)
+      ? data.map((q) => ({
+          id: q.id,
+          title: q.title,
+          description: q.description,
+          created_at: q.created_at,
+          score: Array.isArray(q.votes)
+            ? q.votes.reduce((s, v) => s + v.vote_value, 0)
+            : 0,
+          user: q.users || { username: "Unknown" },
+        }))
+      : [];
 
     res.json({
       data: formatted,
@@ -92,6 +97,7 @@ export const getAllQuestions = async (req, res) => {
       },
     });
   } catch (err) {
+    console.error("Error in getAllQuestions:", err);
     res.status(500).json({ message: err.message });
   }
 };
