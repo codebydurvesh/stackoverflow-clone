@@ -1,25 +1,62 @@
 import React, { useState } from "react";
 import Header from "../components/Header";
+import { supabase } from "../config/supabase.js";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
 const AskQuestion = () => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const apiUrl = import.meta.env.VITE_API_URL;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setError("");
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+    if (!accessToken) {
+      setError("You must be logged in to ask a question.");
+      setLoading(false);
+      return;
+    }
 
-    const questionPayload = {
-      title,
-      description,
-      tags: tags.split(",").map((tag) => tag.trim()),
-    };
+    const tagsArray = tags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0);
 
-    console.log("Question Submitted:", questionPayload);
-
-    // Later:
-    // POST to backend / Supabase / MongoDB
-    // Redirect to question details page
+    try {
+      await axios.post(
+        `${apiUrl}/questions/create`,
+        {
+          title,
+          description,
+          tags: tagsArray,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      );
+      setLoading(false);
+      setTimeout(() => {
+        navigate("/");
+      }, 100);
+    } catch (error) {
+      setError(
+        error.response?.data?.message ||
+          "An error occurred while posting your question.",
+      );
+      setLoading(false);
+    }
   };
 
   return (
@@ -88,8 +125,9 @@ const AskQuestion = () => {
             <button
               type="submit"
               className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md"
+              disabled={loading}
             >
-              Post your question
+              {loading ? "Posting..." : "Post your question"}
             </button>
 
             <button

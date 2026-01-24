@@ -101,6 +101,12 @@ export const createQuestion = async (req, res) => {
     const { title, description, tags = [] } = req.body;
     const userId = req.user.id;
 
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ message: "Unauthorized, req.user.id missing" });
+    }
+
     if (!title || !description || !tags.length) {
       return res
         .status(400)
@@ -108,29 +114,50 @@ export const createQuestion = async (req, res) => {
     }
 
     // Ai Moderation
-    const moderationResult = await moderateQuestion({ title, description });
+    // const moderationResult = await moderateQuestion({ title, description });
+    // console.log("Moderation Result:", moderationResult);
 
-    if (moderationResult.decision === "BLOCK") {
-      return res.status(400).json({
-        message: "Question blocked by AI moderation",
-        reason: moderationResult.reason,
-      });
-    }
+    // if (moderationResult.decision === "BLOCK") {
+    //   return res.status(400).json({
+    //     message: "Question blocked by AI moderation",
+    //     reason: moderationResult.reason,
+    //   });
+    // }
 
-    const { data: question } = await supabase
+    const { data: question, error: questionError } = await supabase
       .from("questions")
       .insert({ title, description, author_id: userId })
       .select()
       .single();
 
+    if (questionError) {
+      console.error("Question insert error:", questionError);
+      return res.status(500).json({ message: questionError.message });
+    }
+    if (!question) {
+      return res.status(500).json({ message: "Failed to create question." });
+    }
+
     // attach tags
-    const { data: tagRows } = await supabase
+    const { data: tagRows, error: tagError } = await supabase
       .from("tags")
       .select("id")
       .in(
         "name",
         tags.map((t) => t.toLowerCase()),
       );
+    console.log(
+      "Requested Tags:",
+      tags.map((t) => t.toLowerCase()),
+    );
+    console.log("Fetched Tag Rows:", tagRows);
+    if (tagError) {
+      console.error("Tag select error:", tagError);
+      return res.status(500).json({ message: tagError.message });
+    }
+    if (!tagRows || !tagRows.length) {
+      return res.status(400).json({ message: "Some or all tags not found." });
+    }
 
     const questionTags = tagRows.map((t) => ({
       question_id: question.id,
@@ -141,7 +168,7 @@ export const createQuestion = async (req, res) => {
 
     res.status(201).json(question);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ "Questions Create Error": err.message });
   }
 };
 
