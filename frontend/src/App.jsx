@@ -15,7 +15,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
-          <Route path="/question" element={<QuestionDetails />} />
+          <Route path="/question/:id" element={<QuestionDetails />} />
           {/* shows up the details of the selected question */}
           <Route
             path="/account"

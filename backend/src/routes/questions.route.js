@@ -10,6 +10,6 @@ router.get("/", getAllQuestions);
 
 router.post("/create", authMiddleware, createQuestion);
 
-router.get("/:id", getQuestionById);
+router.get("/details/:id", getQuestionById);
 
 export { router };

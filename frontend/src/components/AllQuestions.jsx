@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
 const AllQuestions = ({ questions }) => {
   const timeAgo = (date) => {
@@ -38,7 +39,7 @@ const AllQuestions = ({ questions }) => {
           {/* Question Content */}
           <div className="flex-1">
             <h2 className="text-blue-600 hover:text-blue-800 font-medium text-lg cursor-pointer">
-              {q.title}
+              <Link to={`/question/${q.id}`}>{q.title}</Link>
             </h2>
             <p className="text-gray-600 text-sm mt-1 line-clamp-2">
               {q.description}

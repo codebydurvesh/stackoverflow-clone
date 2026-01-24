@@ -188,7 +188,11 @@ export const getQuestionById = async (req, res) => {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    const { data: question } = await supabase
+    if (!id) {
+      return res.status(400).json({ message: "Question ID is required" });
+    }
+
+    const { data: question, error: questionError } = await supabase
       .from("questions")
       .select(
         `
@@ -204,6 +208,9 @@ export const getQuestionById = async (req, res) => {
 
     if (!question)
       return res.status(404).json({ message: "Question not found" });
+    if (questionError) {
+      return res.status(500).json({ message: questionError.message });
+    }
 
     let answersQuery = supabase
       .from("answers")
@@ -213,8 +220,7 @@ export const getQuestionById = async (req, res) => {
         content,
         is_accepted,
         created_at,
-        users ( id, username, avatar_url ),
-        votes ( vote_value )
+        users ( id, username, avatar_url )
         `,
         { count: "exact" },
       )
@@ -231,7 +237,16 @@ export const getQuestionById = async (req, res) => {
       answersQuery = answersQuery.order("created_at", { ascending: false });
     }
 
-    const { data: answers, count } = await answersQuery.range(from, to);
+    const {
+      data: answers,
+      count,
+      error: answersError,
+    } = await answersQuery.range(from, to);
+
+    if (answersError) {
+      console.error("Answers fetch error:", answersError);
+      return res.status(500).json({ message: answersError.message });
+    }
 
     const formattedAnswers = answers.map((a) => ({
       id: a.id,
@@ -253,6 +268,6 @@ export const getQuestionById = async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ "Questions Get By ID Error": err.message });
   }
 };
