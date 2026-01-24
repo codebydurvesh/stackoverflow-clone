@@ -1,14 +1,16 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const genAI = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+});
 
 export const moderateQuestion = async ({ title, description }) => {
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
   const prompt = `
-You are a strict moderator for a Stack Overflow like website.
+IMPORTANT:
+You must respond with ONLY valid JSON.
+Do NOT include explanations, markdown, or extra text.
 
-Check the following question and decide if it should be ALLOWED or BLOCKED.
+You are a strict moderator for a Stack Overflow like website.
 
 Rules:
 - Must be related to programming, software, computers, or technology
@@ -16,9 +18,9 @@ Rules:
 - Must NOT be personal chat or non-technical
 - Must NOT be extremely low effort
 
-Respond ONLY in JSON format like this:
+Respond in EXACTLY this JSON format:
 {
-  "decision": "ALLOW" or "BLOCK",
+  "decision": "ALLOW" | "BLOCK",
   "reason": "short reason"
 }
 
@@ -27,19 +29,37 @@ Title: "${title}"
 Description: "${description}"
 `;
 
-  const result = await model.generateContent(prompt);
-  const text = result.response.text();
-
-  let parsed;
   try {
-    parsed = JSON.parse(text);
-  } catch {
-    //  if AI responds incorrectly => block
+    const result = await genAI.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: prompt }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0,
+      },
+    });
+
+    const text = result.text.trim();
+
+    // Safe JSON extraction
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) {
+      return {
+        decision: "BLOCK",
+        reason: "AI returned invalid format",
+      };
+    }
+
+    return JSON.parse(match[0]);
+  } catch (error) {
+    console.error("AI Moderation Error:", error);
     return {
       decision: "BLOCK",
       reason: "AI moderation failed",
     };
   }
-
-  return parsed;
 };

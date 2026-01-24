@@ -10,6 +10,7 @@ const AskQuestion = () => {
   const [tags, setTags] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [moderationError, setModerationError] = useState("");
   const navigate = useNavigate();
   const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -51,10 +52,11 @@ const AskQuestion = () => {
         navigate("/");
       }, 100);
     } catch (error) {
-      setError(
-        error.response?.data?.message ||
-          "An error occurred while posting your question.",
-      );
+      if (error.response?.status === 400) {
+        setModerationError(`🚫 ${error.response.data.reason}`);
+      } else {
+        setModerationError("Something went wrong. Please try again.");
+      }
       setLoading(false);
     }
   };
@@ -121,26 +123,29 @@ const AskQuestion = () => {
           </div>
 
           {/* Submit */}
-          <div className="flex gap-4">
-            <button
-              type="submit"
-              className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md"
-              disabled={loading}
-            >
-              {loading ? "Posting..." : "Post your question"}
-            </button>
+          <div>
+            <div className="text-red-600 mb-1">{moderationError}</div>
+            <div className="flex gap-4">
+              <button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md"
+                disabled={loading}
+              >
+                {loading ? "Posting..." : "Post your question"}
+              </button>
 
-            <button
-              type="button"
-              className="text-gray-600 border border-gray-300 w-18 rounded-md hover:text-gray-900 cursor-pointer hover:bg-gray-100"
-              onClick={() => {
-                setTitle("");
-                setDescription("");
-                setTags("");
-              }}
-            >
-              Reset
-            </button>
+              <button
+                type="button"
+                className="text-gray-600 border border-gray-300 w-18 rounded-md hover:text-gray-900 cursor-pointer hover:bg-gray-100"
+                onClick={() => {
+                  setTitle("");
+                  setDescription("");
+                  setTags("");
+                }}
+              >
+                Reset
+              </button>
+            </div>
           </div>
         </form>
       </div>

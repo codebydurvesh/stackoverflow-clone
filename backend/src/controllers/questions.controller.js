@@ -114,15 +114,15 @@ export const createQuestion = async (req, res) => {
     }
 
     // Ai Moderation
-    // const moderationResult = await moderateQuestion({ title, description });
-    // console.log("Moderation Result:", moderationResult);
+    const moderationResult = await moderateQuestion({ title, description });
+    console.log("Moderation Result:", moderationResult);
 
-    // if (moderationResult.decision === "BLOCK") {
-    //   return res.status(400).json({
-    //     message: "Question blocked by AI moderation",
-    //     reason: moderationResult.reason,
-    //   });
-    // }
+    if (moderationResult.decision === "BLOCK") {
+      return res.status(400).json({
+        message: "Question blocked by AI moderation",
+        reason: moderationResult.reason,
+      });
+    }
 
     const { data: question, error: questionError } = await supabase
       .from("questions")
