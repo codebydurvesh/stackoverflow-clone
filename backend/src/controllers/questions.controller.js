@@ -46,14 +46,14 @@ export const getAllQuestions = async (req, res) => {
       }
     }
 
+    /* ---------------- FETCH QUESTIONS ---------------- */
     let query = supabase.from("questions").select(
       `
         id,
         title,
         description,
         created_at,
-        users ( id, username),
-        votes ( vote_value )
+        users ( id, username )
         `,
       { count: "exact" },
     );
@@ -62,29 +62,49 @@ export const getAllQuestions = async (req, res) => {
 
     if (sort === "oldest") {
       query = query.order("created_at", { ascending: true });
-    } else if (sort === "votes") {
-      query = query.order("votes(vote_value)", {
-        ascending: false,
-        nullsFirst: false,
-      });
     } else {
       query = query.order("created_at", { ascending: false });
     }
 
-    const { data, count } = await query.range(from, to);
+    const { data: questions, count, error } = await query.range(from, to);
 
-    const formatted = Array.isArray(data)
-      ? data.map((q) => ({
-          id: q.id,
-          title: q.title,
-          description: q.description,
-          created_at: q.created_at,
-          score: Array.isArray(q.votes)
-            ? q.votes.reduce((s, v) => s + v.vote_value, 0)
-            : 0,
-          user: q.users || { username: "Unknown" },
-        }))
-      : [];
+    if (error) throw error;
+    if (!questions?.length) {
+      return res.json({
+        data: [],
+        pagination: { page, limit, total: 0, totalPages: 0 },
+      });
+    }
+
+    /* ---------------- FETCH VOTES SEPARATELY ---------------- */
+    const questionIdsOnly = questions.map((q) => q.id);
+
+    const { data: votes } = await supabase
+      .from("votes")
+      .select("target_id, vote_value")
+      .eq("target_type", "question")
+      .in("target_id", questionIdsOnly);
+
+    /* ---------------- MAP VOTES ---------------- */
+    const voteMap = {};
+    votes?.forEach((v) => {
+      voteMap[v.target_id] = (voteMap[v.target_id] || 0) + v.vote_value;
+    });
+
+    /* ---------------- FORMAT RESPONSE ---------------- */
+    let formatted = questions.map((q) => ({
+      id: q.id,
+      title: q.title,
+      description: q.description,
+      created_at: q.created_at,
+      vote_count: voteMap[q.id] || 0,
+      user: q.users,
+    }));
+
+    /* ---------------- SORT BY VOTES (JS LEVEL) ---------------- */
+    if (sort === "votes") {
+      formatted = formatted.sort((a, b) => b.vote_count - a.vote_count);
+    }
 
     res.json({
       data: formatted,
@@ -197,7 +217,7 @@ export const getQuestionById = async (req, res) => {
         created_at,
         votes ( vote_value ),
         users ( id, username, avatar_url )
-        `
+        `,
       )
       .eq("id", id)
       .single();
@@ -239,7 +259,7 @@ export const getQuestionById = async (req, res) => {
         created_at,
         users ( id, username, avatar_url )
         `,
-        { count: "exact" }
+        { count: "exact" },
       )
       .eq("question_id", id)
       .order("is_accepted", { ascending: false });
@@ -268,4 +288,3 @@ export const getQuestionById = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-

@@ -31,7 +31,7 @@ const AllQuestions = ({ questions }) => {
         >
           {/* Left Stats */}
           <div className="flex flex-col items-center text-sm text-gray-600 min-w-[90px]">
-            <span className="font-medium">{q.votes || 0} votes</span>
+            <span className="font-medium">{q.vote_count || 0} votes</span>
             <span className="font-medium">{q.answers || 0} answers</span>
             <span>{q.views || 0} views</span>
           </div>
