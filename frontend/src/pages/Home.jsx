@@ -23,7 +23,6 @@ const Home = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [currentUserId, setCurrentUserId] = useState(null);
 
-  /* ---------- LOAD AUTH USER ---------- */
   useEffect(() => {
     const loadUser = async () => {
       const { data } = await supabase.auth.getUser();
@@ -32,7 +31,6 @@ const Home = () => {
     loadUser();
   }, []);
 
-  /* ---------- FETCH QUESTIONS ---------- */
   useEffect(() => {
     const fetchQuestions = async () => {
       setLoading(true);
@@ -55,7 +53,6 @@ const Home = () => {
     fetchQuestions();
   }, [page, limit, sort, tags, search]);
 
-  /* ---------- HANDLERS ---------- */
   const changeSort = (value) => {
     setSort(value);
     setPage(1); // reset page when sort changes
@@ -70,7 +67,6 @@ const Home = () => {
     <>
       <Header />
 
-      {/* ---------- HEADER ---------- */}
       <div className="flex justify-between mx-10 px-4 mt-8 items-center">
         <h1 className="text-2xl font-bold">
           {sort === "newest" ? "Newest Questions" : "Oldest Questions"}
@@ -82,7 +78,6 @@ const Home = () => {
         </Link>
       </div>
 
-      {/* ---------- SORT TABS ---------- */}
       <div className="flex ml-14 mt-3 items-center gap-1 border border-gray-300 rounded-md w-fit bg-white">
         <button
           onClick={() => changeSort("newest")}
@@ -107,7 +102,6 @@ const Home = () => {
         </button>
       </div>
 
-      {/* ---------- QUESTIONS ---------- */}
       <AllQuestions questions={questions} currentUserId={currentUserId} />
 
       {loading && (
@@ -116,7 +110,6 @@ const Home = () => {
 
       {error && <p className="mt-10 text-center text-red-500">{error}</p>}
 
-      {/* ---------- PAGINATION ---------- */}
       {totalPages > 1 && (
         <div className="flex justify-between items-center mx-14 my-10">
           {/* Page Numbers */}

@@ -4,17 +4,12 @@ import {
   revertAnswerUpvote,
 } from "../services/reputation.service.js";
 
-/**
- * CREATE ANSWER
- * - Logged-in users only
- * - Cannot answer own question
- */
+
 export const createAnswer = async (req, res) => {
   try {
     const { questionId, content } = req.body;
     const userId = req.user.id;
 
-    // 1. Get question author
     const { data: question } = await supabase
       .from("questions")
       .select("author_id")
@@ -28,7 +23,6 @@ export const createAnswer = async (req, res) => {
       });
     }
 
-    // 2. Insert answer
     const { data: answer, error } = await supabase
       .from("answers")
       .insert({
@@ -41,7 +35,6 @@ export const createAnswer = async (req, res) => {
 
     if (error) throw error;
 
-    // 3. CREATE NOTIFICATION 🔔
     await supabase.from("notifications").insert({
       user_id: question.author_id, // question author
       answer_id: answer.id,
@@ -54,12 +47,7 @@ export const createAnswer = async (req, res) => {
   }
 };
 
-/**
- * ACCEPT ANSWER
- * - Only question author
- * - Only one accepted answer
- * - Reputation handled
- */
+
 export const acceptAnswer = async (req, res) => {
   try {
     const userId = req.user.id;

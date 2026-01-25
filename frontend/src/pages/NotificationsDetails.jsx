@@ -32,7 +32,6 @@ const NotificationDetails = () => {
     fetchDetails();
   }, [id]);
 
-  // ✅ ACCEPT ANSWER
   const handleAccept = async () => {
     if (accepting) return;
     setAccepting(true);
@@ -52,7 +51,6 @@ const NotificationDetails = () => {
     navigate("/notifications");
   };
 
-  // REJECT ANSWER (DELETE)
   const handleReject = async () => {
     if (rejecting) return;
     setRejecting(true);

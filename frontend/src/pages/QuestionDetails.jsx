@@ -9,7 +9,6 @@ const apiUrl = import.meta.env.VITE_API_URL;
 const QuestionDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  // ---------------- STATES ----------------
   const [answer, setAnswer] = useState("");
   const [posting, setPosting] = useState(false);
 
@@ -22,7 +21,6 @@ const QuestionDetails = () => {
 
   const [currentUserId, setCurrentUserId] = useState(null);
 
-  // ---------------- TIME FORMAT ----------------
   const timeAgo = (date) => {
     const seconds = Math.floor((Date.now() - new Date(date)) / 1000);
     if (seconds < 60) return "just now";
@@ -35,7 +33,6 @@ const QuestionDetails = () => {
     return new Date(date).toLocaleDateString();
   };
 
-  // ---------------- LOAD AUTH USER ----------------
   useEffect(() => {
     const loadUser = async () => {
       const { data } = await supabase.auth.getUser();
@@ -44,7 +41,6 @@ const QuestionDetails = () => {
     loadUser();
   }, []);
 
-  // ---------------- FETCH QUESTION ----------------
   useEffect(() => {
     const fetchQuestion = async () => {
       setLoading(true);
@@ -66,7 +62,6 @@ const QuestionDetails = () => {
     fetchQuestion();
   }, [id, voting]);
 
-  // ---------------- DERIVED ----------------
   const isAuthor =
     currentUserId && questionData?.question?.users?.id === currentUserId;
 
@@ -74,9 +69,20 @@ const QuestionDetails = () => {
     (a) => a.is_accepted === true,
   );
 
-  // ---------------- HANDLE VOTE ----------------
   const handleVote = async (type) => {
     if (voting) return;
+
+    const { data: session } = await supabase.auth.getSession();
+    if (!session?.session?.access_token) {
+      alert("Login required to vote");
+      navigate("/login");
+      return;
+    }
+
+    if (isAuthor) {
+      alert("You cannot vote on your own question");
+      return;
+    }
 
     const delta =
       type === "up"
@@ -98,9 +104,6 @@ const QuestionDetails = () => {
     setVoting(true);
 
     try {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session?.session?.access_token) throw new Error("Auth required");
-
       await axios.post(
         `${apiUrl}/votes/vote`,
         { questionId: id, type },
@@ -111,16 +114,15 @@ const QuestionDetails = () => {
         },
       );
     } catch (err) {
+      // rollback UI on failure
       setVoteCount((v) => v - delta);
       setUserVote(prevVote);
-      alert("Login required to vote");
-      navigate("/login");
+      alert(err.response?.data?.message || "Failed to vote");
     } finally {
       setVoting(false);
     }
   };
 
-  // ---------------- POST ANSWER ----------------
   const handlePostAnswer = async () => {
     if (!answer.trim()) return alert("Answer cannot be empty");
 
@@ -153,7 +155,6 @@ const QuestionDetails = () => {
     }
   };
 
-  // ---------------- RENDER ----------------
   if (loading) {
     return (
       <>

@@ -14,7 +14,6 @@ export const getAllQuestions = async (req, res) => {
 
     let questionIds = null;
 
-    /* ---------- TAG FILTERING (explicit tags=react) ---------- */
     if (tagsParam) {
       const tagNames = tagsParam.split(",").map((t) => t.trim().toLowerCase());
 
@@ -47,17 +46,14 @@ export const getAllQuestions = async (req, res) => {
       }
     }
 
-    /* ---------- SEARCH (title + description + tags) ---------- */
     if (search) {
       const keyword = search.toLowerCase();
 
-      // 1️⃣ title / description matches
       const { data: textMatches } = await supabase
         .from("questions")
         .select("id")
         .or(`title.ilike.%${keyword}%,description.ilike.%${keyword}%`);
 
-      // 2️⃣ tag matches
       const { data: tagMatches } = await supabase
         .from("question_tags")
         .select("question_id, tags!inner(name)")
@@ -80,7 +76,6 @@ export const getAllQuestions = async (req, res) => {
         : combinedIds;
     }
 
-    /* ---------- FETCH QUESTIONS ---------- */
     let query = supabase
       .from("questions")
       .select(
@@ -113,7 +108,6 @@ export const getAllQuestions = async (req, res) => {
       });
     }
 
-    /* ---------- FETCH VOTES ---------- */
     const questionIdsOnly = questions.map((q) => q.id);
 
     const { data: votes } = await supabase
@@ -127,7 +121,6 @@ export const getAllQuestions = async (req, res) => {
       voteMap[v.target_id] = (voteMap[v.target_id] || 0) + v.vote_value;
     });
 
-    /* ---------- FETCH TAGS ---------- */
     const { data: questionTags } = await supabase
       .from("question_tags")
       .select("question_id, tags(name)")
@@ -139,7 +132,6 @@ export const getAllQuestions = async (req, res) => {
       tagMap[qt.question_id].push(qt.tags.name);
     });
 
-    /* ---------- FORMAT RESPONSE ---------- */
     let formatted = questions.map((q) => ({
       id: q.id,
       title: q.title,
@@ -151,7 +143,6 @@ export const getAllQuestions = async (req, res) => {
       tags: tagMap[q.id] || [],
     }));
 
-    /* ---------- SORT BY VOTES ---------- */
     if (sort === "votes") {
       formatted = formatted.sort((a, b) => b.vote_count - a.vote_count);
     }
@@ -188,7 +179,6 @@ export const createQuestion = async (req, res) => {
         .json({ message: "Title, description & tags required" });
     }
 
-    // Ai Moderation
     const moderationResult = await moderateQuestion({ title, description });
     console.log("Moderation Result:", moderationResult);
 
@@ -201,48 +191,53 @@ export const createQuestion = async (req, res) => {
 
     const { data: question, error: questionError } = await supabase
       .from("questions")
-      .insert({ title, description, author_id: userId })
+      .insert({
+        title,
+        description,
+        author_id: userId,
+      })
       .select()
       .single();
 
-    if (questionError) {
+    if (questionError || !question) {
       console.error("Question insert error:", questionError);
-      return res.status(500).json({ message: questionError.message });
-    }
-    if (!question) {
       return res.status(500).json({ message: "Failed to create question." });
     }
 
-    // attach tags
-    const { data: tagRows, error: tagError } = await supabase
+    const normalizedTags = tags
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean);
+
+    const { data: upsertedTags, error: tagUpsertError } = await supabase
       .from("tags")
-      .select("id")
-      .in(
-        "name",
-        tags.map((t) => t.toLowerCase()),
-      );
-    console.log(
-      "Requested Tags:",
-      tags.map((t) => t.toLowerCase()),
-    );
-    console.log("Fetched Tag Rows:", tagRows);
-    if (tagError) {
-      console.error("Tag select error:", tagError);
-      return res.status(500).json({ message: tagError.message });
-    }
-    if (!tagRows || !tagRows.length) {
-      return res.status(400).json({ message: "Some or all tags not found." });
+      .upsert(
+        normalizedTags.map((name) => ({ name })),
+        { onConflict: "name" },
+      )
+      .select();
+
+    if (tagUpsertError) {
+      console.error("Tag upsert error:", tagUpsertError);
+      return res.status(500).json({ message: tagUpsertError.message });
     }
 
-    const questionTags = tagRows.map((t) => ({
+    const questionTags = upsertedTags.map((tag) => ({
       question_id: question.id,
-      tag_id: t.id,
+      tag_id: tag.id,
     }));
 
-    await supabase.from("question_tags").insert(questionTags);
+    const { error: questionTagError } = await supabase
+      .from("question_tags")
+      .insert(questionTags);
+
+    if (questionTagError) {
+      console.error("Question_tags insert error:", questionTagError);
+      return res.status(500).json({ message: questionTagError.message });
+    }
 
     res.status(201).json(question);
   } catch (err) {
+    console.error("Questions Create Error:", err);
     res.status(500).json({ "Questions Create Error": err.message });
   }
 };
@@ -276,14 +271,12 @@ export const getQuestionById = async (req, res) => {
       return res.status(404).json({ message: "Question not found" });
     }
 
-    // ✅ TOTAL VOTES
     const vote_count = Array.isArray(question.votes)
       ? question.votes.reduce((s, v) => s + v.vote_value, 0)
       : 0;
 
     delete question.votes;
 
-    // ✅ USER VOTE (AUTH-AWARE)
     let user_vote = null;
 
     if (req.user?.id) {
