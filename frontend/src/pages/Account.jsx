@@ -1,82 +1,95 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Header from "../components/Header";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../config/supabase.js";
-import { useEffect } from "react";
+import axios from "axios";
+
+const apiUrl = import.meta.env.VITE_API_URL;
 
 const Account = () => {
   const navigate = useNavigate();
-  const logoutHandler = () => {
-    const { error } = supabase.auth.signOut();
-    if (error) {
-      console.log("Error logging out:", error.message);
-    } else {
-      navigate("/");
-    }
-  };
 
   const [authUser, setAuthUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const logoutHandler = async () => {
+    await supabase.auth.signOut();
+    navigate("/");
+  };
 
   useEffect(() => {
-    const fetchUserDetails = async () => {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-      if (!user || userError) {
-        console.log("No user found");
+    const loadAccount = async () => {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session?.access_token) {
+        console.log("No session found, redirecting to home.");
+        navigate("/");
         return;
       }
-      console.log("Auth user id:", user.id);
-      setAuthUser(user);
-      const { data: profile, error: profileError } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-      setProfile(profile);
+
+      const res = await axios.get(`${apiUrl}/account/me`, {
+        headers: {
+          Authorization: `Bearer ${session.session.access_token}`,
+        },
+      });
+
+      setProfile(res.data);
+      setLoading(false);
     };
-    if (profileError) {
-      console.log("Error fetching profile:", profileError.message);
-    }
-    fetchUserDetails();
+
+    loadAccount();
   }, []);
-  console.log(profile);
-  console.log(authUser);
+
+  if (loading) {
+    return (
+      <>
+        <Header />
+        <div className="flex justify-center mt-24 text-gray-500">
+          Loading account...
+        </div>
+      </>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <>
+        <Header />
+        <div className="flex justify-center mt-24 text-red-500">
+          Failed to load profile
+        </div>
+      </>
+    );
+  }
 
   return (
     <div>
       <Header />
+
       <div className="max-w-5xl mx-auto px-4 py-6 mt-24">
-        {/* Header */}
+        {/* PROFILE HEADER */}
         <div className="flex items-center gap-6 bg-white p-6 rounded-md border border-gray-200">
           <img
             src="https://cdn-icons-png.freepik.com/512/9307/9307950.png"
-            alt="account icon"
+            alt="account"
             className="w-28 h-28 rounded-md object-cover"
           />
 
           <div className="flex-1">
             <h1 className="text-2xl font-semibold text-gray-900">
-              {profile ? profile.username : "Loading..."}
+              {profile.username}
             </h1>
-            <p className="text-gray-600">
-              {profile ? profile.email : "Loading..."}
-            </p>
+            <p className="text-gray-600">{profile.email}</p>
 
             <div className="flex gap-6 mt-4 text-sm text-gray-600">
               <span>
-                <strong>{profile ? profile.reputation : "Loading..."}</strong>{" "}
-                reputation
+                <strong>{profile?.reputation ?? 0}</strong> reputation
               </span>
               <span>
-                <strong>{profile ? profile.questions : "Loading..."}</strong>{" "}
-                questions
+                <strong>{profile?.questions_count ?? 0}</strong> questions
               </span>
               <span>
-                <strong>{profile ? profile.answers : "Loading..."}</strong>{" "}
-                answers
+                <strong>{profile?.answers_count ?? 0}</strong> answers
               </span>
             </div>
           </div>
@@ -89,7 +102,7 @@ const Account = () => {
           </button>
         </div>
 
-        {/* Account Details */}
+        {/* ACCOUNT DETAILS */}
         <div className="mt-6 bg-white rounded-md border border-gray-200">
           <div className="px-6 py-4 border-b">
             <h2 className="text-lg font-medium">Account Details</h2>
@@ -108,12 +121,14 @@ const Account = () => {
 
             <div>
               <p className="text-sm text-gray-500">Member Since</p>
-              <p className="text-gray-900">{profile.joined}</p>
+              <p className="text-gray-900">
+                {new Date(profile.created_at).toLocaleDateString()}
+              </p>
             </div>
 
             <div>
               <p className="text-sm text-gray-500">Reputation</p>
-              <p className="text-gray-900">{profile.reputation}</p>
+              <p className="text-gray-900">{profile.reputation ?? 0}</p>
             </div>
           </div>
         </div>

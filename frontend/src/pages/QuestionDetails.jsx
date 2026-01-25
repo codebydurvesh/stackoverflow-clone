@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Header from "../components/Header.jsx";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 import { supabase } from "../config/supabase.js";
 
@@ -9,7 +9,6 @@ const apiUrl = import.meta.env.VITE_API_URL;
 const QuestionDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-
   // ---------------- STATES ----------------
   const [answer, setAnswer] = useState("");
   const [posting, setPosting] = useState(false);
@@ -71,11 +70,14 @@ const QuestionDetails = () => {
   const isAuthor =
     currentUserId && questionData?.question?.users?.id === currentUserId;
 
+  const acceptedAnswer = questionData?.answers?.find(
+    (a) => a.is_accepted === true,
+  );
+
   // ---------------- HANDLE VOTE ----------------
   const handleVote = async (type) => {
     if (voting) return;
 
-    // optimistic delta
     const delta =
       type === "up"
         ? userVote === 1
@@ -97,10 +99,7 @@ const QuestionDetails = () => {
 
     try {
       const { data: session } = await supabase.auth.getSession();
-
-      if (!session?.session?.access_token) {
-        throw new Error("Not authenticated");
-      }
+      if (!session?.session?.access_token) throw new Error("Auth required");
 
       await axios.post(
         `${apiUrl}/votes/vote`,
@@ -112,7 +111,6 @@ const QuestionDetails = () => {
         },
       );
     } catch (err) {
-      // rollback
       setVoteCount((v) => v - delta);
       setUserVote(prevVote);
       alert("Login required to vote");
@@ -122,7 +120,7 @@ const QuestionDetails = () => {
     }
   };
 
-  // Handle Answer Post
+  // ---------------- POST ANSWER ----------------
   const handlePostAnswer = async () => {
     if (!answer.trim()) return alert("Answer cannot be empty");
 
@@ -131,17 +129,14 @@ const QuestionDetails = () => {
       const { data: session } = await supabase.auth.getSession();
 
       if (!session?.session?.access_token) {
-        alert("Login required to post answer");
+        alert("Login required");
         navigate("/login");
         return;
       }
 
       await axios.post(
         `${apiUrl}/answers/create`,
-        {
-          questionId: id,
-          content: answer,
-        },
+        { questionId: id, content: answer },
         {
           headers: {
             Authorization: `Bearer ${session.session.access_token}`,
@@ -150,7 +145,7 @@ const QuestionDetails = () => {
       );
 
       setAnswer("");
-      alert("Answer submitted successfully!");
+      alert("Answer submitted!");
     } catch (err) {
       alert(err.response?.data?.message || "Failed to post answer");
     } finally {
@@ -173,6 +168,7 @@ const QuestionDetails = () => {
       <Header />
 
       <div className="max-w-6xl mx-auto px-4 py-6 mt-5">
+        {/* TITLE */}
         <h1 className="text-2xl font-semibold text-gray-900 mb-4">
           {questionData.question?.title}
         </h1>
@@ -211,25 +207,64 @@ const QuestionDetails = () => {
 
             <div className="text-sm text-gray-500 mt-4">
               {timeAgo(questionData.question?.created_at)} by{" "}
-              <span className="text-blue-600">
-                {questionData.question?.users?.username}
-              </span>
+              {isAuthor ? (
+                <Link to="/account" className="font-semibold text-blue-600">
+                  you
+                </Link>
+              ) : (
+                <span className="text-blue-600">
+                  {questionData.question?.users?.username}
+                </span>
+              )}
             </div>
           </div>
         </div>
 
         <hr className="my-8" />
 
-        {/* ANSWER BOX (author cannot answer) */}
+        {/* ACCEPTED ANSWER */}
+        {acceptedAnswer && (
+          <div className="mb-10">
+            <h2 className="text-xl font-semibold mb-4 text-green-700">
+              ✓ Accepted Answer
+            </h2>
+
+            <div className="border border-green-300 bg-green-50 rounded-md p-5">
+              <div className="flex justify-between items-center mb-3">
+                <p className="text-sm text-gray-600">
+                  Answered by{" "}
+                  <span className="font-medium">
+                    {acceptedAnswer.users?.username}
+                  </span>
+                </p>
+                <span className="text-green-700 font-semibold text-sm">
+                  Accepted
+                </span>
+              </div>
+
+              <p className="text-gray-900 whitespace-pre-line">
+                {acceptedAnswer.content}
+              </p>
+
+              <div className="text-xs text-gray-500 mt-4">
+                {timeAgo(acceptedAnswer.created_at)}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ANSWER BOX */}
         {!isAuthor && (
           <div>
             <h2 className="text-xl font-semibold mb-3">Your Answer</h2>
+
             <textarea
               className="w-full min-h-[180px] border rounded-md p-3"
               placeholder="Type your answer here..."
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
             />
+
             <button
               disabled={posting}
               onClick={handlePostAnswer}

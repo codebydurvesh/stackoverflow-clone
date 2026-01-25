@@ -6,14 +6,14 @@ export const getAllQuestions = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const sort = req.query.sort || "newest";
-    const tagsParam = req.query.tags || req.query.tag || null;
+    const tagsParam = req.query.tags || null;
 
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
     let questionIds = null;
 
-    // Tag filtering
+    /* ---------- TAG FILTERING ---------- */
     if (tagsParam) {
       const tagNames = tagsParam.split(",").map((t) => t.trim().toLowerCase());
 
@@ -46,29 +46,33 @@ export const getAllQuestions = async (req, res) => {
       }
     }
 
-    /* ---------------- FETCH QUESTIONS ---------------- */
-    let query = supabase.from("questions").select(
-      `
+    /* ---------- FETCH QUESTIONS ---------- */
+    let query = supabase
+      .from("questions")
+      .select(
+        `
         id,
         title,
         description,
         created_at,
-        users ( id, username )
-        `,
-      { count: "exact" },
-    );
+        users ( id, username ),
+        answers ( id, is_accepted )
+      `,
+        { count: "exact" },
+      )
+      .range(from, to);
 
     if (questionIds) query = query.in("id", questionIds);
 
-    if (sort === "oldest") {
-      query = query.order("created_at", { ascending: true });
-    } else {
-      query = query.order("created_at", { ascending: false });
-    }
+    query =
+      sort === "oldest"
+        ? query.order("created_at", { ascending: true })
+        : query.order("created_at", { ascending: false });
 
-    const { data: questions, count, error } = await query.range(from, to);
+    const { data: questions, count, error } = await query;
 
     if (error) throw error;
+
     if (!questions?.length) {
       return res.json({
         data: [],
@@ -76,7 +80,7 @@ export const getAllQuestions = async (req, res) => {
       });
     }
 
-    /* ---------------- FETCH VOTES SEPARATELY ---------------- */
+    /* ---------- FETCH VOTES ---------- */
     const questionIdsOnly = questions.map((q) => q.id);
 
     const { data: votes } = await supabase
@@ -85,23 +89,23 @@ export const getAllQuestions = async (req, res) => {
       .eq("target_type", "question")
       .in("target_id", questionIdsOnly);
 
-    /* ---------------- MAP VOTES ---------------- */
     const voteMap = {};
     votes?.forEach((v) => {
       voteMap[v.target_id] = (voteMap[v.target_id] || 0) + v.vote_value;
     });
 
-    /* ---------------- FORMAT RESPONSE ---------------- */
+    /* ---------- FORMAT RESPONSE ---------- */
     let formatted = questions.map((q) => ({
       id: q.id,
       title: q.title,
       description: q.description,
       created_at: q.created_at,
       vote_count: voteMap[q.id] || 0,
-      user: q.users,
+      has_accepted_answer: q.answers?.some((a) => a.is_accepted) || false,
+      user: q.users || { username: "Unknown" },
     }));
 
-    /* ---------------- SORT BY VOTES (JS LEVEL) ---------------- */
+    /* ---------- SORT BY VOTES ---------- */
     if (sort === "votes") {
       formatted = formatted.sort((a, b) => b.vote_count - a.vote_count);
     }
@@ -262,6 +266,7 @@ export const getQuestionById = async (req, res) => {
         { count: "exact" },
       )
       .eq("question_id", id)
+      .eq("is_accepted", true)
       .order("is_accepted", { ascending: false });
 
     if (sort === "oldest") {

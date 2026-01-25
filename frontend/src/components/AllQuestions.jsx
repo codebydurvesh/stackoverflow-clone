@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 
-const AllQuestions = ({ questions }) => {
+const AllQuestions = ({ questions, currentUserId }) => {
   const timeAgo = (date) => {
     const seconds = Math.floor((Date.now() - new Date(date)) / 1000);
 
@@ -30,10 +30,18 @@ const AllQuestions = ({ questions }) => {
           className="flex gap-6 px-6 py-4 border-b last:border-b-0"
         >
           {/* Left Stats */}
-          <div className="flex flex-col items-center text-sm text-gray-600 min-w-[90px]">
+          <div className="flex flex-col items-center gap-2 text-sm text-gray-600 min-w-[90px] mt-2">
             <span className="font-medium">{q.vote_count || 0} votes</span>
-            <span className="font-medium">{q.answers || 0} answers</span>
-            <span>{q.views || 0} views</span>
+            {/* ANSWER STATUS */}
+            <div
+              className={`text-sm font-medium px-3 py-1 rounded-md ${
+                q.has_accepted_answer
+                  ? "bg-green-100 text-green-700"
+                  : "bg-gray-100 text-gray-600"
+              }`}
+            >
+              {q.has_accepted_answer ? "Answered" : "Unanswered"}
+            </div>
           </div>
 
           {/* Question Content */}
@@ -58,13 +66,21 @@ const AllQuestions = ({ questions }) => {
                 ))}
               </div>
 
-              <div className="text-xs text-gray-500">
+              <p className="text-sm text-gray-500">
                 asked by{" "}
-                <span className="text-blue-600 cursor-pointer">
-                  {q.user?.username}
-                </span>{" "}
-                {timeAgo(q.created_at)}
-              </div>
+                {currentUserId && q.user?.id === currentUserId ? (
+                  <Link
+                    to="/account"
+                    className="font-semibold text-blue-600 cursor-pointer"
+                  >
+                    you
+                  </Link>
+                ) : (
+                  <span className="text-blue-600 cursor-pointer">
+                    {q.user?.username}
+                  </span>
+                )}
+              </p>
             </div>
           </div>
         </div>

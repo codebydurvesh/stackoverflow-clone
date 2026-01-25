@@ -4,6 +4,7 @@ import Header from "../components/Header.jsx";
 import AllQuestions from "../components/AllQuestions.jsx";
 import axios from "axios";
 import { useEffect } from "react";
+import { supabase } from "../config/supabase.js";
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -16,6 +17,21 @@ const Home = () => {
   const [limit, setLimit] = useState(10);
   const [sort, setSort] = useState("newest");
   const [tags, setTags] = useState("");
+  const [currentUserId, setCurrentUserId] = useState(null);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) {
+        console.log("Error fetching user:", error);
+        return;
+      }
+      setCurrentUserId(data?.user?.id ?? null);
+    };
+    loadUser();
+  }, []);
+
+  console.log("Current User ID in Home:", currentUserId);
 
   useEffect(() => {
     const fetchQuestions = async () => {
@@ -58,7 +74,7 @@ const Home = () => {
           Oldest
         </button>
       </div>
-      <AllQuestions questions={questions} />
+      <AllQuestions questions={questions} currentUserId={currentUserId} />
       {loading && (
         <p className="flex mt-20 justify-center items-center text-sm text-gray-500">
           Loading questions...
