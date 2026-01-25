@@ -26,3 +26,18 @@ export const applyAnswerDownvote = async (authorId) => {
 export const applyAnswerAccepted = async (authorId) => {
   await incrementUserReputation(authorId, +15);
 };
+export const applyQuestionUpvote = async (authorId) => {
+  await incrementUserReputation(authorId, +10);
+};
+
+export const revertQuestionUpvote = async (authorId) => {
+  await incrementUserReputation(authorId, -10);
+};
+
+export const applyQuestionDownvote = async (authorId) => {
+  await incrementUserReputation(authorId, -2);
+};
+
+export const applyQuestionAccepted = async (authorId) => {
+  await incrementUserReputation(authorId, +15);
+};

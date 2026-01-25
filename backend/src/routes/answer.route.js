@@ -6,6 +6,6 @@ import authMiddleware from "../middlewares/auth.middleware.js";
 const router = Router();
 
 router.post("/create", authMiddleware, createAnswer);
-router.patch("/:id/accept", acceptAnswer);
+router.patch("/:id/accept", authMiddleware, acceptAnswer);
 
 export { router };

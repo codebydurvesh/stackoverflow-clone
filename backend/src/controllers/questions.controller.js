@@ -72,7 +72,6 @@ export const getAllQuestions = async (req, res) => {
     }
 
     const { data, count } = await query.range(from, to);
-    console.log("Fetched questions data:", data);
 
     const formatted = Array.isArray(data)
       ? data.map((q) => ({
@@ -188,11 +187,7 @@ export const getQuestionById = async (req, res) => {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    if (!id) {
-      return res.status(400).json({ message: "Question ID is required" });
-    }
-
-    const { data: question, error: questionError } = await supabase
+    const { data: question, error } = await supabase
       .from("questions")
       .select(
         `
@@ -200,18 +195,40 @@ export const getQuestionById = async (req, res) => {
         title,
         description,
         created_at,
+        votes ( vote_value ),
         users ( id, username, avatar_url )
-        `,
+        `
       )
       .eq("id", id)
       .single();
 
-    if (!question)
+    if (error || !question) {
       return res.status(404).json({ message: "Question not found" });
-    if (questionError) {
-      return res.status(500).json({ message: questionError.message });
     }
 
+    // ✅ TOTAL VOTES
+    const vote_count = Array.isArray(question.votes)
+      ? question.votes.reduce((s, v) => s + v.vote_value, 0)
+      : 0;
+
+    delete question.votes;
+
+    // ✅ USER VOTE (AUTH-AWARE)
+    let user_vote = null;
+
+    if (req.user?.id) {
+      const { data: voteRow } = await supabase
+        .from("votes")
+        .select("vote_value")
+        .eq("target_id", id)
+        .eq("target_type", "question")
+        .eq("user_id", req.user.id)
+        .single();
+
+      user_vote = voteRow?.vote_value ?? null;
+    }
+
+    // ANSWERS
     let answersQuery = supabase
       .from("answers")
       .select(
@@ -222,44 +239,24 @@ export const getQuestionById = async (req, res) => {
         created_at,
         users ( id, username, avatar_url )
         `,
-        { count: "exact" },
+        { count: "exact" }
       )
       .eq("question_id", id)
       .order("is_accepted", { ascending: false });
 
     if (sort === "oldest") {
       answersQuery = answersQuery.order("created_at", { ascending: true });
-    } else if (sort === "votes") {
-      answersQuery = answersQuery.order("votes(vote_value)", {
-        ascending: false,
-      });
     } else {
       answersQuery = answersQuery.order("created_at", { ascending: false });
     }
 
-    const {
-      data: answers,
-      count,
-      error: answersError,
-    } = await answersQuery.range(from, to);
-
-    if (answersError) {
-      console.error("Answers fetch error:", answersError);
-      return res.status(500).json({ message: answersError.message });
-    }
-
-    const formattedAnswers = answers.map((a) => ({
-      id: a.id,
-      content: a.content,
-      is_accepted: a.is_accepted,
-      created_at: a.created_at,
-      score: a.votes?.reduce((s, v) => s + v.vote_value, 0) || 0,
-      user: a.users,
-    }));
+    const { data: answers, count } = await answersQuery.range(from, to);
 
     res.json({
       question,
-      answers: formattedAnswers,
+      vote_count,
+      user_vote,
+      answers,
       pagination: {
         page,
         limit,
@@ -268,6 +265,7 @@ export const getQuestionById = async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ "Questions Get By ID Error": err.message });
+    res.status(500).json({ message: err.message });
   }
 };
+

@@ -35,6 +35,7 @@ const Home = () => {
     };
     fetchQuestions();
   }, []);
+  console.log(questions);
   return (
     <>
       <Header />
