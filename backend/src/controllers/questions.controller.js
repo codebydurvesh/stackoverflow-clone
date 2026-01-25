@@ -3,6 +3,7 @@ import { moderateQuestion } from "../services/aiModeration.service.js";
 
 export const getAllQuestions = async (req, res) => {
   try {
+    const search = req.query.search || null;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const sort = req.query.sort || "newest";
@@ -51,16 +52,20 @@ export const getAllQuestions = async (req, res) => {
       .from("questions")
       .select(
         `
-        id,
-        title,
-        description,
-        created_at,
-        users ( id, username ),
-        answers ( id, is_accepted )
-      `,
+    id,
+    title,
+    description,
+    created_at,
+    users ( id, username ),
+    answers ( id, is_accepted )
+  `,
         { count: "exact" },
       )
       .range(from, to);
+
+    if (search) {
+      query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
+    }
 
     if (questionIds) query = query.in("id", questionIds);
 

@@ -4,6 +4,7 @@ import Header from "../components/Header.jsx";
 import AllQuestions from "../components/AllQuestions.jsx";
 import axios from "axios";
 import { supabase } from "../config/supabase.js";
+import { useSearchParams } from "react-router-dom";
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -11,6 +12,8 @@ const Home = () => {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [searchParams] = useSearchParams();
+  const search = searchParams.get("search") || "";
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10); // default 10
@@ -36,7 +39,7 @@ const Home = () => {
       setError("");
       try {
         const res = await axios.get(`${apiUrl}/questions`, {
-          params: { page, limit, sort, tags },
+          params: { page, limit, sort, tags, search },
         });
 
         setQuestions(res.data.data || []);
@@ -50,7 +53,7 @@ const Home = () => {
     };
 
     fetchQuestions();
-  }, [page, limit, sort, tags]); // 🔑 VERY IMPORTANT
+  }, [page, limit, sort, tags, search]);
 
   /* ---------- HANDLERS ---------- */
   const changeSort = (value) => {

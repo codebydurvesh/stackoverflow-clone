@@ -1,8 +1,17 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const Header = () => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const navigate = useNavigate();
+
+  const handleSearch = (e) => {
+    if (e.key === "Enter" && search.trim()) {
+      navigate(`/?search=${encodeURIComponent(search.trim())}`);
+      setMenuOpen(false);
+    }
+  };
 
   return (
     <header className="w-full shadow-md bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -45,6 +54,9 @@ const Header = () => {
         <div className="hidden md:flex flex-1 justify-center px-6">
           <input
             type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={handleSearch}
             placeholder="Search…"
             className="w-full max-w-2xl px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
@@ -83,11 +95,16 @@ const Header = () => {
         <div className="md:hidden border-t bg-white shadow-sm">
           <div className="px-4 py-4 space-y-3">
             {/* Search */}
-            <input
-              type="text"
-              placeholder="Search…"
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
+            <div className="hidden md:flex flex-1 justify-center px-6">
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={handleSearch}
+                placeholder="Search…"
+                className="w-full max-w-2xl px-3 py-2 text-sm border rounded-md focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
 
             <Link
               to="/"
