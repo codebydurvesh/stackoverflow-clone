@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from "react";
 import Header from "../components/Header.jsx";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { supabase } from "../config/supabase.js";
-import { useNavigate } from "react-router-dom";
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
 const QuestionDetails = () => {
-  const navigate = useNavigate();
   const { id } = useParams();
+  const navigate = useNavigate();
+
+  // ---------------- STATES ----------------
+  const [answer, setAnswer] = useState("");
+  const [posting, setPosting] = useState(false);
 
   const [questionData, setQuestionData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -18,6 +21,9 @@ const QuestionDetails = () => {
   const [userVote, setUserVote] = useState(null);
   const [voting, setVoting] = useState(false);
 
+  const [currentUserId, setCurrentUserId] = useState(null);
+
+  // ---------------- TIME FORMAT ----------------
   const timeAgo = (date) => {
     const seconds = Math.floor((Date.now() - new Date(date)) / 1000);
     if (seconds < 60) return "just now";
@@ -30,18 +36,25 @@ const QuestionDetails = () => {
     return new Date(date).toLocaleDateString();
   };
 
-  // FETCH QUESTION (WITH AUTH HEADER)
+  // ---------------- LOAD AUTH USER ----------------
   useEffect(() => {
-    const fetchQuestionDetails = async () => {
+    const loadUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      setCurrentUserId(data?.user?.id ?? null);
+    };
+    loadUser();
+  }, []);
+
+  // ---------------- FETCH QUESTION ----------------
+  useEffect(() => {
+    const fetchQuestion = async () => {
       setLoading(true);
 
       const { data: session } = await supabase.auth.getSession();
 
       const res = await axios.get(`${apiUrl}/questions/details/${id}`, {
         headers: session?.session?.access_token
-          ? {
-              Authorization: `Bearer ${session.session.access_token}`,
-            }
+          ? { Authorization: `Bearer ${session.session.access_token}` }
           : {},
       });
 
@@ -51,13 +64,18 @@ const QuestionDetails = () => {
       setLoading(false);
     };
 
-    fetchQuestionDetails();
-  }, [id]);
+    fetchQuestion();
+  }, [id, voting]);
 
-  //  HANDLE VOTE (OPTIMISTIC + SAFE)
+  // ---------------- DERIVED ----------------
+  const isAuthor =
+    currentUserId && questionData?.question?.users?.id === currentUserId;
+
+  // ---------------- HANDLE VOTE ----------------
   const handleVote = async (type) => {
     if (voting) return;
 
+    // optimistic delta
     const delta =
       type === "up"
         ? userVote === 1
@@ -72,6 +90,7 @@ const QuestionDetails = () => {
             : -1;
 
     const prevVote = userVote;
+
     setVoteCount((v) => v + delta);
     setUserVote(type === "up" ? 1 : -1);
     setVoting(true);
@@ -93,22 +112,59 @@ const QuestionDetails = () => {
         },
       );
     } catch (err) {
-      // rollback on error
+      // rollback
       setVoteCount((v) => v - delta);
       setUserVote(prevVote);
-      alert(err.response?.data?.message || "You have to login to vote.");
+      alert("Login required to vote");
       navigate("/login");
     } finally {
       setVoting(false);
     }
   };
 
+  // Handle Answer Post
+  const handlePostAnswer = async () => {
+    if (!answer.trim()) return alert("Answer cannot be empty");
+
+    try {
+      setPosting(true);
+      const { data: session } = await supabase.auth.getSession();
+
+      if (!session?.session?.access_token) {
+        alert("Login required to post answer");
+        navigate("/login");
+        return;
+      }
+
+      await axios.post(
+        `${apiUrl}/answers/create`,
+        {
+          questionId: id,
+          content: answer,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${session.session.access_token}`,
+          },
+        },
+      );
+
+      setAnswer("");
+      alert("Answer submitted successfully!");
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to post answer");
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  // ---------------- RENDER ----------------
   if (loading) {
     return (
-      <div>
+      <>
         <Header />
         <div className="flex justify-center mt-12">Loading Question...</div>
-      </div>
+      </>
     );
   }
 
@@ -155,7 +211,7 @@ const QuestionDetails = () => {
 
             <div className="text-sm text-gray-500 mt-4">
               {timeAgo(questionData.question?.created_at)} by{" "}
-              <span className="text-blue-600 cursor-pointer">
+              <span className="text-blue-600">
                 {questionData.question?.users?.username}
               </span>
             </div>
@@ -164,19 +220,25 @@ const QuestionDetails = () => {
 
         <hr className="my-8" />
 
-        {/* ANSWER BOX */}
-        <div>
-          <h2 className="text-xl font-semibold mb-3">Your Answer</h2>
-
-          <textarea
-            className="w-full min-h-[180px] border rounded-md p-3"
-            placeholder="Type your answer here..."
-          />
-
-          <button className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md">
-            Post Your Answer
-          </button>
-        </div>
+        {/* ANSWER BOX (author cannot answer) */}
+        {!isAuthor && (
+          <div>
+            <h2 className="text-xl font-semibold mb-3">Your Answer</h2>
+            <textarea
+              className="w-full min-h-[180px] border rounded-md p-3"
+              placeholder="Type your answer here..."
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+            />
+            <button
+              disabled={posting}
+              onClick={handlePostAnswer}
+              className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md"
+            >
+              {posting ? "Posting..." : "Post Your Answer"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

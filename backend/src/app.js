@@ -3,6 +3,7 @@ import cors from "cors";
 import { router as questionsRouter } from "./routes/questions.route.js";
 import { router as answerRouter } from "./routes/answer.route.js";
 import { router as votesRouter } from "./routes/votes.routes.js";
+import { router as notificationsRouter } from "./routes/notifications.route.js";
 
 const app = express();
 
@@ -19,6 +20,7 @@ app.use(
 app.use("/api/questions", questionsRouter);
 app.use("/api/answers", answerRouter);
 app.use("/api/votes", votesRouter);
+app.use("/api/notifications", notificationsRouter);
 
 // ping
 app.get("/ping", (req, res) => {
