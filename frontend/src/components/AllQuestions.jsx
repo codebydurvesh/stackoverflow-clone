@@ -76,10 +76,11 @@ const AllQuestions = ({ questions, currentUserId }) => {
                     you
                   </Link>
                 ) : (
-                  <span className="text-blue-600 cursor-pointer">
+                  <span className="text-blue-600 cursor-pointer mr-1">
                     {q.user?.username}
                   </span>
                 )}
+                {timeAgo(q.created_at)}
               </p>
             </div>
           </div>
