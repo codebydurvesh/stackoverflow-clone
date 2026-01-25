@@ -14,7 +14,7 @@ export const getAllQuestions = async (req, res) => {
 
     let questionIds = null;
 
-    /* ---------- TAG FILTERING ---------- */
+    /* ---------- TAG FILTERING (explicit tags=react) ---------- */
     if (tagsParam) {
       const tagNames = tagsParam.split(",").map((t) => t.trim().toLowerCase());
 
@@ -47,25 +47,54 @@ export const getAllQuestions = async (req, res) => {
       }
     }
 
+    /* ---------- SEARCH (title + description + tags) ---------- */
+    if (search) {
+      const keyword = search.toLowerCase();
+
+      // 1️⃣ title / description matches
+      const { data: textMatches } = await supabase
+        .from("questions")
+        .select("id")
+        .or(`title.ilike.%${keyword}%,description.ilike.%${keyword}%`);
+
+      // 2️⃣ tag matches
+      const { data: tagMatches } = await supabase
+        .from("question_tags")
+        .select("question_id, tags!inner(name)")
+        .ilike("tags.name", `%${keyword}%`);
+
+      const textIds = textMatches?.map((q) => q.id) || [];
+      const tagIds = tagMatches?.map((t) => t.question_id) || [];
+
+      const combinedIds = [...new Set([...textIds, ...tagIds])];
+
+      if (!combinedIds.length) {
+        return res.json({
+          data: [],
+          pagination: { page, limit, total: 0, totalPages: 0 },
+        });
+      }
+
+      questionIds = questionIds
+        ? questionIds.filter((id) => combinedIds.includes(id))
+        : combinedIds;
+    }
+
     /* ---------- FETCH QUESTIONS ---------- */
     let query = supabase
       .from("questions")
       .select(
         `
-    id,
-    title,
-    description,
-    created_at,
-    users ( id, username ),
-    answers ( id, is_accepted )
-  `,
+          id,
+          title,
+          description,
+          created_at,
+          users ( id, username ),
+          answers ( id, is_accepted )
+        `,
         { count: "exact" },
       )
       .range(from, to);
-
-    if (search) {
-      query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
-    }
 
     if (questionIds) query = query.in("id", questionIds);
 
@@ -75,7 +104,6 @@ export const getAllQuestions = async (req, res) => {
         : query.order("created_at", { ascending: false });
 
     const { data: questions, count, error } = await query;
-
     if (error) throw error;
 
     if (!questions?.length) {
@@ -99,6 +127,18 @@ export const getAllQuestions = async (req, res) => {
       voteMap[v.target_id] = (voteMap[v.target_id] || 0) + v.vote_value;
     });
 
+    /* ---------- FETCH TAGS ---------- */
+    const { data: questionTags } = await supabase
+      .from("question_tags")
+      .select("question_id, tags(name)")
+      .in("question_id", questionIdsOnly);
+
+    const tagMap = {};
+    questionTags?.forEach((qt) => {
+      if (!tagMap[qt.question_id]) tagMap[qt.question_id] = [];
+      tagMap[qt.question_id].push(qt.tags.name);
+    });
+
     /* ---------- FORMAT RESPONSE ---------- */
     let formatted = questions.map((q) => ({
       id: q.id,
@@ -108,6 +148,7 @@ export const getAllQuestions = async (req, res) => {
       vote_count: voteMap[q.id] || 0,
       has_accepted_answer: q.answers?.some((a) => a.is_accepted) || false,
       user: q.users || { username: "Unknown" },
+      tags: tagMap[q.id] || [],
     }));
 
     /* ---------- SORT BY VOTES ---------- */

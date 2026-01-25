@@ -71,7 +71,7 @@ const AllQuestions = ({ questions, currentUserId }) => {
                 {currentUserId && q.user?.id === currentUserId ? (
                   <Link
                     to="/account"
-                    className="font-semibold text-blue-600 cursor-pointer"
+                    className="font-semibold text-blue-600 cursor-pointer mr-1"
                   >
                     you
                   </Link>
